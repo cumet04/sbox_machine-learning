@@ -1,95 +1,59 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
+import pandas as pd
 import numpy as np
-import tensorflow as tf
-import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+import math
+import random
+from keras.models import Sequential
+from keras.layers.core import Dense, Activation
+from keras.layers.recurrent import LSTM
 
-sess = tf.Session()
+random.seed(0)  # 乱数の係数
+random_factor = 0.05  # サイクルあたりのステップ数
+steps_per_cycle = 80  # 生成するサイクル数
+number_of_cycles = 50
 
-if False:
-    a = tf.constant(3.0, dtype=tf.float32)
-    b = tf.constant(4.0)  # also tf.float32 implicitly
-    total = a + b
-    print(a)
-    print(b)
-    print(total)
+sin_values = pd.DataFrame(np.arange(steps_per_cycle * number_of_cycles + 1), columns=["time"])
+sin_values["value"] = sin_values.time.apply(
+    lambda x: math.sin(
+        x * (2 * math.pi / steps_per_cycle) + random.uniform(-1.0, +1.0) * random_factor
+    )
+)
 
-if False:
-    vec = tf.random_uniform(shape=(3,))
-    out1 = vec + 1
-    out2 = vec + 2
-    print(sess.run(vec))
-    print(sess.run(vec))
-    print(sess.run((out1, out2)))
 
-if False:
-    my_data = [
-        [0, 1, ],
-        [2, 3, ],
-        [4, 5, ],
-        [6, 7, ],
-    ]
-    slices = tf.data.Dataset.from_tensor_slices(my_data)
-    next_item = slices.make_one_shot_iterator().get_next()
+def generate_train_set(rawdata, n_prev=100):
+    # rawdata as DataFrame
+    result_len = len(rawdata) - n_prev
+    inputs = [rawdata.iloc[i : i + n_prev].values for i in range(result_len)]
+    expected = [rawdata.iloc[i + n_prev].values for i in range(result_len)]
+    return np.array(inputs), np.array(expected)
 
-    while True:
-        try:
-            print(sess.run(next_item))
-        except tf.errors.OutOfRangeError:
-            break
 
-if False:
-    r = tf.random_normal([10, 4])
-    dataset = tf.data.Dataset.from_tensor_slices(r)
-    iterator = dataset.make_initializable_iterator()
-    next_row = iterator.get_next()
+def train_test_split(df, train_data_rate=0.9, n_prev=100):
+    train_data_len = int(round(len(df) * train_data_rate))
+    train = df.iloc[0:train_data_len]
+    test = df.iloc[train_data_len:]
+    return generate_train_set(train, n_prev), generate_train_set(test, n_prev)
 
-    sess.run(iterator.initializer)
-    while True:
-        try:
-            print(sess.run(next_row))
-        except tf.errors.OutOfRangeError:
-            break
 
-if False:
-    x = tf.placeholder(tf.float32, shape=[None, 3])
-    linear_model = tf.layers.Dense(units=1)
-    print(sess.run(linear_model.kernel_initializer))
-    y = linear_model(x)
+length_of_sequences = 100
+(train_x, train_y), (test_x, test_y) = train_test_split(
+    sin_values[["value"]], n_prev=length_of_sequences
+)
 
-    init = tf.global_variables_initializer()
-    sess.run(init)
+in_out_neurons = 1
+hidden_neurons = 300
 
-    print(sess.run(y, {x: [
-        [1, 2, 3],
-        [1, 2, 3],
-        [1, 2, 3],
-        [1, 2, 3],
-        [1, 2, 3],
-        [1, 2, 3]
-    ]}))
+model = Sequential()
+model.add(
+    LSTM(
+        hidden_neurons,
+        batch_input_shape=(None, length_of_sequences, in_out_neurons),
+        return_sequences=False,
+    )
+)
+model.add(Dense(in_out_neurons))
+model.add(Activation("linear"))
+model.compile(loss="mean_squared_error", optimizer="rmsprop")
+model.fit(train_x, train_y, batch_size=600, nb_epoch=15, validation_split=0.05)
 
-if True:
-    x = tf.constant([[1], [2], [3], [4]], dtype=tf.float32)
-    y_true = tf.constant([[0], [-1], [-2], [-3]], dtype=tf.float32)
-
-    linear_model = tf.layers.Dense(units=1)
-
-    y_pred = linear_model(x)
-    loss = tf.losses.mean_squared_error(labels=y_true, predictions=y_pred)
-
-    optimizer = tf.train.GradientDescentOptimizer(0.01)
-    train = optimizer.minimize(loss)
-
-    init = tf.global_variables_initializer()
-
-    sess = tf.Session()
-    sess.run(init)
-    for i in range(1000):
-        _, loss_value = sess.run((train, loss))
-        # print(loss_value)
-
-    print(sess.run(y_pred))
+predicted = model.predict(test_x)
+print(predicted)
