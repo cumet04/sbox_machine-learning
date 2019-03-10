@@ -6,17 +6,19 @@ from keras.models import Sequential
 from keras.layers.core import Dense, Activation
 from keras.layers.recurrent import LSTM
 
-random.seed(0)  # 乱数の係数
-random_factor = 0.05  # サイクルあたりのステップ数
-steps_per_cycle = 80  # 生成するサイクル数
-number_of_cycles = 50
+random.seed(0)
 
-sin_values = pd.DataFrame(np.arange(steps_per_cycle * number_of_cycles + 1), columns=["time"])
-sin_values["value"] = sin_values.time.apply(
-    lambda x: math.sin(
-        x * (2 * math.pi / steps_per_cycle) + random.uniform(-1.0, +1.0) * random_factor
+
+def gen_sin_values():
+    steps_per_cycle = 80
+    number_of_cycles = 50
+    random_factor = 0.05
+    sin_values = pd.DataFrame(np.arange(steps_per_cycle * number_of_cycles + 1), columns=["time"])
+    sin_values["value"] = sin_values.time.apply(
+        lambda x: math.sin(
+            x * (2 * math.pi / steps_per_cycle) + random.uniform(-1.0, +1.0) * random_factor
+        )
     )
-)
 
 
 def generate_train_set(rawdata, n_prev=100):
@@ -35,6 +37,7 @@ def train_test_split(df, train_data_rate=0.9, n_prev=100):
 
 
 length_of_sequences = 100
+sin_values = gen_sin_values()
 (train_x, train_y), (test_x, test_y) = train_test_split(
     sin_values[["value"]], n_prev=length_of_sequences
 )
