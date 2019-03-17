@@ -19,44 +19,34 @@ def gen_sin_values():
             x * (2 * math.pi / steps_per_cycle) + random.uniform(-1.0, +1.0) * random_factor
         )
     )
+    return sin_values
 
 
 def generate_train_set(rawdata, n_prev=100):
-    # rawdata as DataFrame
     result_len = len(rawdata) - n_prev
     inputs = [rawdata.iloc[i : i + n_prev].values for i in range(result_len)]
     expected = [rawdata.iloc[i + n_prev].values for i in range(result_len)]
     return np.array(inputs), np.array(expected)
 
 
-def train_test_split(df, train_data_rate=0.9, n_prev=100):
-    train_data_len = int(round(len(df) * train_data_rate))
-    train = df.iloc[0:train_data_len]
-    test = df.iloc[train_data_len:]
-    return generate_train_set(train, n_prev), generate_train_set(test, n_prev)
-
-
-length_of_sequences = 100
 sin_values = gen_sin_values()
-(train_x, train_y), (test_x, test_y) = train_test_split(
-    sin_values[["value"]], n_prev=length_of_sequences
-)
+train_x, train_y = generate_train_set(sin_values[["value"]])
 
-in_out_neurons = 1
 hidden_neurons = 300
-
 model = Sequential()
 model.add(
     LSTM(
         hidden_neurons,
-        batch_input_shape=(None, length_of_sequences, in_out_neurons),
+        batch_input_shape=(None, train_x.shape[1], train_x.shape[2]),
         return_sequences=False,
     )
 )
-model.add(Dense(in_out_neurons))
+
+model.add(Dense(train_x.shape[2]))
 model.add(Activation("linear"))
 model.compile(loss="mean_squared_error", optimizer="rmsprop")
-model.fit(train_x, train_y, batch_size=600, nb_epoch=15, validation_split=0.05)
 
-predicted = model.predict(test_x)
-print(predicted)
+model.fit(train_x, train_y, batch_size=100, nb_epoch=10, validation_split=0.05)
+
+# predicted = model.predict(test_x)
+# print(predicted)
